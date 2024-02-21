@@ -69,8 +69,11 @@ namespace MinecraftService.Service.Server {
                 int currentFileCount = 0;
                 foreach (FileInfo levelFile in levelFiles) {
                     currentFileCount++;
-                    if(currentFileCount % progressCallCount == 0) {
-                        _logger.AppendLine($"Adding files to archive. {currentFileCount / 6}% complete...");
+                    try {
+                        if (progressCallCount != 0 && currentFileCount % progressCallCount == 0) {
+                            _logger.AppendLine($"Adding files to archive. {currentFileCount / 6}% complete...");
+                        }
+                    } catch {
                     }
                     backupZip.CreateEntryFromFile(levelFile.FullName, $"{_serverConfiguration.GetProp(MmsDependServerPropKeys.LevelName)}/{levelFile.Name}");
                 }
@@ -110,11 +113,10 @@ namespace MinecraftService.Service.Server {
                 _logger.AppendLine($"Copied files from backup \"{backupZipFileInfo.Name}\" to server worlds directory.");
                 MinecraftPackParser parser = new(_logger, progress);
                 foreach (FileInfo file in backupPacksDir.GetFiles()) {
-                    currentMessage = $"Clearing temp files.";
-                    FileUtilities.ClearTempDir(progress).Wait();
-                    ZipUtilities.ExtractToDirectory(file.FullName, $@"{Path.GetTempPath()}\MMSTemp\PackTemp", progress);
+                    string tempDir = $@"{Path.GetTempPath()}{FileUtilities.GetRandomPrefix()}MMSTemp\PackTemp";
+                    ZipUtilities.ExtractToDirectory(file.FullName, tempDir, progress);
                     parser.FoundPacks.Clear();
-                    parser.ParseDirectory($@"{Path.GetTempPath()}\MMSTemp\PackTemp", 0);
+                    parser.ParseDirectory(tempDir, 0);
                     if (parser.FoundPacks[0].ManifestType == "data") {
                         currentMessage = $"Clearing and extracting BP {parser.FoundPacks[0].FolderName}";
                         string folderPath = $@"{_serverConfiguration.GetSettingsProp(ServerPropertyKeys.ServerPath)}\development_behavior_packs\{file.Name.Substring(0, file.Name.Length - file.Extension.Length)}";

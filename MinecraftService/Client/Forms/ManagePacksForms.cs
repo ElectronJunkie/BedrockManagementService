@@ -12,6 +12,7 @@ using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace MinecraftService.Client.Forms {
@@ -22,7 +23,7 @@ namespace MinecraftService.Client.Forms {
         private readonly DirectoryInfo _packExtractDir;
         public ManagePacksForms(byte serverIndex, IServerLogger logger, IProcessInfo processInfo) {
             _logger = logger;
-            _packExtractDir = new DirectoryInfo($"{Path.GetTempPath()}\\MMSTemp\\ExaminePacks");
+            _packExtractDir = new DirectoryInfo($"{Path.GetTempPath()}{FileUtilities.GetRandomPrefix()}MMSTemp\\ExaminePacks");
             _processInfo = processInfo;
             _serverIndex = serverIndex;
             InitializeComponent();
@@ -31,12 +32,6 @@ namespace MinecraftService.Client.Forms {
         public void PopulateServerData(List<MinecraftPackContainer> packList, LLServerPluginRegistry pluginReg = null) {
             foreach (MinecraftPackContainer container in packList) {
                 serverListBox.Items.Add(container);
-            }
-            if (pluginReg != null) {
-                MmsServerPluginDatabase db = pluginReg.ServerPluginList[_serverIndex];
-                foreach (PluginVersionInfo info in db.InstalledPlugins) {
-
-                }
             }
         }
 
@@ -85,23 +80,25 @@ namespace MinecraftService.Client.Forms {
 
         private void openFileBtn_Click(object sender, EventArgs e) {
             OpenFileDialog openFileDialog = new();
+            ProgressDialog progressDialog = new(null);
             openFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             openFileDialog.Filter = "MC pack file (.MCWORLD, .MCPACK, .MCADDON, .Zip)|*.mcworld;*.mcpack;*.mcaddon;*.zip";
             openFileDialog.Title = "Select pack file(s)";
             openFileDialog.Multiselect = true;
             if (openFileDialog.ShowDialog() == DialogResult.OK) {
-                ClientProgressDialog progressDialog = new();
-                progressDialog.Show(this);
-                MinecraftPackParser parser = new(_logger, progressDialog.GetDialogProgress(), _packExtractDir.FullName);
-                parser.ProcessClientFiles(openFileDialog.FileNames, () => {
-                    Invoke(() => {
-                        parsedPacksListBox.Items.Clear();
-                        foreach (MinecraftPackContainer container in parser.FoundPacks) {
-                            parsedPacksListBox.Items.Add(container);
-                        }
-                        progressDialog.EndProgress();
+                progressDialog.SetCallback(Task.Run(() => {
+                    MinecraftPackParser parser = new(_logger, progressDialog.GetDialogProgress(), _packExtractDir.FullName);
+                    parser.ProcessClientFiles(openFileDialog.FileNames, () => {
+                        Invoke(() => {
+                            parsedPacksListBox.Items.Clear();
+                            foreach (MinecraftPackContainer container in parser.FoundPacks) {
+                                parsedPacksListBox.Items.Add(container);
+                            }
+                            progressDialog.EndProgress(null);
+                        });
                     });
-                });
+                }));
+                progressDialog.Show(this);
             }
         }
 
