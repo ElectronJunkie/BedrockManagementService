@@ -1,12 +1,14 @@
-﻿using MinecraftService.Client.Management;
-using MinecraftService.Shared.Classes;
-using MinecraftService.Shared.Classes.Configurations;
-using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.SerializeModels;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Forms;
+using MinecraftService.Client.Management;
+using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Interfaces;
+using MinecraftService.Shared.SerializeModels;
 using static MinecraftService.Shared.Classes.SharedStringBase;
 
 namespace MinecraftService.Client.Forms {
@@ -14,6 +16,9 @@ namespace MinecraftService.Client.Forms {
         public Dictionary<MinecraftServerArch, ServerCombinedPropModel> LoadedConfigs = new Dictionary<MinecraftServerArch, ServerCombinedPropModel>();
         public ServerCombinedPropModel SelectedPropModel = new();
         private Dictionary<MinecraftServerArch, SimpleVersionModel[]> VersionLists;
+        private Dictionary<MinecraftServerArch, SimpleVersionModel> _latestVersionLookup = new();
+        private bool _customVersionSelected = false;
+        private bool _typeChanging = false;
         private readonly List<IServerConfiguration> _serverConfigurations;
         private readonly IClientSideServiceConfiguration _serviceConfiguration;
         private readonly List<string> serviceConfigExcludeList = new()
@@ -35,11 +40,12 @@ namespace MinecraftService.Client.Forms {
             EnumTypeLookup typeLookup = new EnumTypeLookup(FormManager.Logger, FormManager.MainWindow.connectedHost);
             foreach (KeyValuePair<MinecraftServerArch, string> kvp in MinecraftArchStrings) {
                 ServerCombinedPropModel serverCombinedPropModel = new();
-                server = typeLookup.PrepareNewServerByArchName(kvp.Value, FormManager.processInfo, FormManager.Logger, FormManager.MainWindow.connectedHost);
+                server = typeLookup.PrepareNewServerByArch(kvp.Value, FormManager.processInfo, FormManager.Logger, FormManager.MainWindow.connectedHost);
                 server.InitializeDefaults();
                 serverCombinedPropModel.ServerPropList = server.GetAllProps();
                 serverCombinedPropModel.ServicePropList = server.GetSettingsList();
                 serverCombinedPropModel.VersionList = new List<SimpleVersionModel>(VersionLists[kvp.Key]);
+                _latestVersionLookup.Add(kvp.Key, serverCombinedPropModel.VersionList[0]);
                 LoadedConfigs.Add(server.GetServerArch(), serverCombinedPropModel);
             }
             VersionSelectComboBox.Items.Clear();
@@ -90,7 +96,7 @@ namespace MinecraftService.Client.Forms {
                     return;
                 }
             }
-            if (srvNameBox.TextLength > 0) { 
+            if (srvNameBox.TextLength > 0) {
                 if (SelectedPropModel.ServicePropList.First(prop => prop.KeyName == ServerPropertyStrings[ServerPropertyKeys.MinecraftType]).StringValue == "Java") {
                     SelectedPropModel.ServicePropList.First(prop => prop.KeyName == ServerPropertyStrings[ServerPropertyKeys.ServerName]).StringValue = srvNameBox.Text;
                 } else {
@@ -103,29 +109,40 @@ namespace MinecraftService.Client.Forms {
                 SelectedPropModel.ServerPropList.First(prop => prop.KeyName == MmsDependServerPropStrings[MmsDependServerPropKeys.PortI6]).StringValue = ipV6Box.Text;
 
             SelectedPropModel.ServicePropList.First(prop => prop.KeyName == ServerPropertyStrings[ServerPropertyKeys.ServerVersion]).StringValue = ((SimpleVersionModel)VersionSelectComboBox.SelectedItem).Version;
+            if (_customVersionSelected) {
+                SelectedPropModel.ServicePropList.First(prop => prop.KeyName == ServerPropertyStrings[ServerPropertyKeys.AutoDeployUpdates]).StringValue = "False";
+            }
             DialogResult = DialogResult.OK;
         }
 
         private void ServerTypeComboBox_SelectedIndexChanged(object sender, System.EventArgs e) {
-            SelectedPropModel = LoadedConfigs[GetArchFromString((string)ServerTypeComboBox.SelectedItem)];
+            _typeChanging = true;
+            MinecraftServerArch selectedArch = GetArchFromString((string)ServerTypeComboBox.SelectedItem);
+            SelectedPropModel = LoadedConfigs[selectedArch];
             VersionSelectComboBox.SelectedIndex = -1;
             VersionSelectComboBox.Items.Clear();
             VersionSelectComboBox.Items.AddRange(SelectedPropModel.VersionList.Where(x => x.IsBeta == BetaVersionCheckBox.Checked).ToArray());
-            ipV6Box.Enabled = GetArchFromString((string)ServerTypeComboBox.SelectedItem) != MinecraftServerArch.Java;
+            ipV6Box.Enabled = selectedArch != MinecraftServerArch.Java;
             if (VersionSelectComboBox.Items.Count > 0) {
                 VersionSelectComboBox.SelectedIndex = 0;
             }
+            _typeChanging = false;
+            bool isBedrock = selectedArch == MinecraftServerArch.Bedrock;
+            BetaVersionCheckBox.Enabled = !isBedrock;
+            BetaVersionCheckBox.Visible = !isBedrock;
         }
 
         private void VersionSelectComboBox_SelectedIndexChanged(object sender, System.EventArgs e) {
-     
+            if (!_typeChanging && VersionSelectComboBox.Items.Count > 0 && (SimpleVersionModel)((ComboBox)sender).SelectedItem != null && _latestVersionLookup.GetValueOrDefault(GetArchFromString((string)ServerTypeComboBox.SelectedItem)).Version != ((SimpleVersionModel)((ComboBox)sender).SelectedItem).Version) {
+                _customVersionSelected = true;
+            }
         }
 
         private void BetaVersionCheckBox_CheckedChanged(object sender, System.EventArgs e) {
             VersionSelectComboBox.SelectedIndex = -1;
             VersionSelectComboBox.Items.Clear();
             VersionSelectComboBox.Items.AddRange(SelectedPropModel.VersionList.Where(x => x.IsBeta == BetaVersionCheckBox.Checked).ToArray());
-            if(VersionSelectComboBox.Items.Count > 0) { 
+            if (VersionSelectComboBox.Items.Count > 0) {
                 VersionSelectComboBox.SelectedIndex = 0;
             }
         }

@@ -1,5 +1,9 @@
-﻿using MinecraftService.Service.Server.ConsoleFilters;
+﻿using MinecraftService;
+using MinecraftService.Service;
+using MinecraftService.Service.Server;
+using MinecraftService.Service.Server.ConsoleFilters;
 using MinecraftService.Service.Server.Interfaces;
+using MinecraftService.Service.Server.ServerControllers;
 using MinecraftService.Shared.JsonModels.LiteLoaderJsonModels;
 using MinecraftService.Shared.PackParser;
 using MinecraftService.Shared.SerializeModels;
@@ -9,7 +13,7 @@ using System.IO.Compression;
 using System.Timers;
 using static MinecraftService.Shared.Classes.SharedStringBase;
 
-namespace MinecraftService.Service.Server {
+namespace MinecraftService.Service.Server.ServerControllers {
     public class BedrockServer : IServerController {
         private Task? _serverTask;
         private Task? _watchdogTask;
@@ -32,7 +36,8 @@ namespace MinecraftService.Service.Server {
         private const string _startupMessage = "INFO] Server started.";
         private bool _serverModifiedFlag = true;
         private bool _LiteLoadedServer = false;
-        ConsoleGarbageFilter _garbageFilter = new ConsoleGarbageFilter();
+        private ConsoleGarbageFilter _garbageFilter = new ConsoleGarbageFilter();
+        private ConsoleFilterStrategyClass _consoleFilter;
 
         public BedrockServer(IServerConfiguration serverConfiguration, IConfigurator configurator, IServerLogger logger, IServiceConfiguration serviceConfiguration, IProcessInfo processInfo, IPlayerManager servicePlayerManager) {
             _serverConfiguration = serverConfiguration;
@@ -43,6 +48,7 @@ namespace MinecraftService.Service.Server {
             _logger = logger;
             _serverLogger = new MinecraftServerLogger(_processInfo, _serviceConfiguration, _serverConfiguration);
             _backupManager = new BedrockBackupManager(_logger, this, serverConfiguration, serviceConfiguration);
+            _consoleFilter = new ConsoleFilterStrategyClass(_logger, _configurator, _serverConfiguration, this, _serviceConfiguration);
         }
 
         public void Initialize() {
@@ -72,12 +78,11 @@ namespace MinecraftService.Service.Server {
                 }
                 _serverConfiguration.ValidateDeployedServer();
                 StartServerTask();
+                _timerService.StartTimerService();
                 while (_currentServerStatus != ServerStatus.Started) {
                     Task.Delay(10).Wait();
                 }
-                for (int i = 0; i < Enum.GetNames(typeof(MmsTimerTypes)).Length; i++) {
-                    _timerService.StartTimer((MmsTimerTypes)i);
-                }
+
                 _startTime = DateTime.Now;
             });
         }
@@ -90,7 +95,7 @@ namespace MinecraftService.Service.Server {
                 if (stopWatchdog) {
                     StopWatchdog().Wait();
                 }
-
+                _timerService.StopTimerService();
                 if (_currentServerStatus != ServerStatus.Started) {
                     if (_serverProcess != null) {
                         _serverProcess.Kill();
@@ -103,6 +108,7 @@ namespace MinecraftService.Service.Server {
                 }
             });
         }
+
         public Task RestartServer() {
             return Task.Run(() => {
                 ServerStop(false).Wait();
@@ -141,7 +147,7 @@ namespace MinecraftService.Service.Server {
         }
 
         private void PerformRollback(string zipFilePath) => _backupManager.PerformRollback(zipFilePath);
-    
+
         public ServerStatusModel GetServerStatus() => new() {
             ServerUptime = _startTime,
             ServerStatus = _currentServerStatus,
@@ -155,6 +161,8 @@ namespace MinecraftService.Service.Server {
         public List<IPlayer> GetActivePlayerList() => _connectedPlayers;
 
         public IServerLogger GetLogger() => _serverLogger;
+
+        public IServerLogger GetServiceLogger() => _logger;
 
         public bool IsServerModified() => _serverModifiedFlag;
 
@@ -185,7 +193,6 @@ namespace MinecraftService.Service.Server {
 
         private void StdOutToLog(object sender, DataReceivedEventArgs e) {
             if (e.Data != null) {
-                ConsoleFilterStrategyClass consoleFilter = new ConsoleFilterStrategyClass(_logger, _configurator, _serverConfiguration, this, _serviceConfiguration);
                 string input = e.Data;
                 string logFileText = "NO LOG FILE! - ";
                 int trimIndex = 0;
@@ -196,7 +203,7 @@ namespace MinecraftService.Service.Server {
                     input = input.Substring(trimIndex);
                 }
                 input = _garbageFilter.Filter(input);
-                if (!string.IsNullOrEmpty(input)) { 
+                if (!string.IsNullOrEmpty(input)) {
                     _serverLogger.AppendLine(input);
                     if (input.Equals("Quit correctly")) {
                         _logger.AppendLine($"Server {GetServerName()} received quit signal.");
@@ -208,7 +215,7 @@ namespace MinecraftService.Service.Server {
                     if (input.Contains("Changes to the world are resumed")) {
                         _backupManager.SetBackupComplete();
                     }
-                    foreach (KeyValuePair<string, IConsoleFilter> filter in consoleFilter.FilterList) {
+                    foreach (KeyValuePair<string, IConsoleFilter> filter in _consoleFilter.FilterList) {
                         if (input.Contains(filter.Key)) {
                             filter.Value.Filter(input);
                             break;

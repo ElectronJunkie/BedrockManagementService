@@ -1,5 +1,6 @@
 ﻿
 using MinecraftService.Service.Networking.Interfaces;
+using MinecraftService.Service.Server.Interfaces;
 using MinecraftService.Shared.JsonModels.MinecraftJsonModels;
 using MinecraftService.Shared.SerializeModels;
 using Newtonsoft.Json;
@@ -10,9 +11,11 @@ using static MinecraftService.Shared.Classes.SharedStringBase;
 namespace MinecraftService.Service.Networking.NetworkStrategies {
     public class ExportFileRequest : IMessageParser {
         private readonly IServiceConfiguration _configuration;
+        private readonly IMinecraftService _minecraftService;
         private readonly IConfigurator _configurator;
         private readonly IServerLogger _logger;
-        public ExportFileRequest(IConfigurator configurator, IServiceConfiguration configuration, IServerLogger logger) {
+        public ExportFileRequest(IConfigurator configurator, IMinecraftService minecraftService, IServiceConfiguration configuration, IServerLogger logger) {
+            _minecraftService = minecraftService;
             _configuration = configuration;
             _configurator = configurator;
             _logger = logger;
@@ -21,7 +24,7 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
         public (byte[] data, byte srvIndex, NetworkMessageTypes type) ParseMessage(byte[] data, byte serverIndex) {
             string jsonString = Encoding.UTF8.GetString(data, 5, data.Length - 5);
             ExportImportFileModel exportFileInfo = JsonConvert.DeserializeObject<ExportImportFileModel>(jsonString);
-            if(exportFileInfo == null) {
+            if (exportFileInfo == null) {
                 return (null, 0, 0);
             }
             using MemoryStream ms = new();
@@ -29,6 +32,7 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
             byte[]? exportData = null;
             if (serverIndex != 255) {
                 IServerConfiguration server = _configuration.GetServerInfoByIndex(serverIndex);
+                _minecraftService.GetServerByIndex(serverIndex).ServerStop(false).Wait();
                 exportFileInfo.Filename = $"{exportFileInfo.FileType}-{server.GetServerName()}-{DateTime.Now:yyyyMMdd_hhmmssff}.zip";
                 if (exportFileInfo.FileType == FileTypeFlags.Backup) {
                     string backupPath = $"{server.GetSettingsProp(ServerPropertyKeys.BackupPath)}\\{server.GetServerName()}\\{exportFileInfo.Filename}";
@@ -49,8 +53,8 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
             byteStream.CopyTo(zipStream);
             zipStream.Dispose();
             packageFile.Dispose();
-            
-            
+
+            _minecraftService.GetServerByIndex(serverIndex).ServerStart();
             exportFileInfo.Data = ms.ToArray();
             exportData = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(exportFileInfo));
             return (exportData, 0, NetworkMessageTypes.ExportFile);
@@ -68,7 +72,7 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
             }
             if (exportFileInfo.PackageFlags >= PackageFlags.WorldPacks) {
                 Progress<ProgressModel> progress = new Progress<ProgressModel>((p) => _logger.AppendLine($"Creating pack archive. {p.Progress}% completed..."));
-                FileUtilities.CreatePackBackupFiles(server.GetSettingsProp(ServerPropertyKeys.ServerPath).ToString(), server.GetProp(MmsDependServerPropKeys.LevelName).ToString(), packageFile, progress);
+                FileUtilities.AppendServerPacksToArchive(server.GetSettingsProp(ServerPropertyKeys.ServerPath).ToString(), server.GetProp(MmsDependServerPropKeys.LevelName).ToString(), packageFile, progress);
             }
             if (exportFileInfo.PackageFlags >= PackageFlags.PlayerDatabase) {
                 if (File.Exists(GetServiceFilePath(MmsFileNameKeys.ServerPlayerTelem_Name, server.GetServerName()))) {
@@ -77,6 +81,12 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
                 if (File.Exists(GetServiceFilePath(MmsFileNameKeys.ServerPlayerRegistry_Name, server.GetServerName()))) {
                     packageFile.CreateEntryFromFile(GetServiceFilePath(MmsFileNameKeys.ServerPlayerRegistry_Name, server.GetServerName()), GetServiceFileName(MmsFileNameKeys.ServerPlayerRegistry_Name, server.GetServerName()));
                 }
+            }
+            if(exportFileInfo.PackageFlags == PackageFlags.Full) {
+                string zipPath = $@"{SharedStringBase.GetNewTempDirectory("ServerPackage")}\ServerPackage.zip";
+                Progress<ProgressModel> progress = new Progress<ProgressModel>((p) => _logger.AppendLine($"Creating server archive. {p.Progress}% completed..."));
+                ZipUtilities.CreateFromDirectory(server.GetSettingsProp(ServerPropertyKeys.ServerPath).ToString(), zipPath, progress).Wait();
+                packageFile.CreateEntryFromFile(zipPath, "ServerPackage.zip");
             }
         }
     }

@@ -1,13 +1,9 @@
-﻿using MinecraftService.Client.Management;
-using MinecraftService.Shared.Classes;
-using MinecraftService.Shared.Classes.Configurations;
-using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.SerializeModels;
-using MinecraftService.Shared.Utilities;
-using Newtonsoft.Json;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -17,13 +13,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows.Forms;
+using MinecraftService.Client.Management;
+using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Interfaces;
+using MinecraftService.Shared.SerializeModels;
+using MinecraftService.Shared.Utilities;
+using Newtonsoft.Json;
 using static MinecraftService.Shared.Classes.SharedStringBase;
 
-namespace MinecraftService.Client.Forms
-{
+namespace MinecraftService.Client.Forms {
     public partial class MainWindow : Form {
         public IServiceConfiguration connectedHost;
-        public IServerConfiguration selectedServer;
+        public IServerConfiguration SelectedServer;
         public IClientSideServiceConfiguration clientSideServiceConfiguration;
         public ServiceStatusModel ServiceStatus;
         private List<string> _localCommandHistory = new();
@@ -43,7 +44,6 @@ namespace MinecraftService.Client.Forms
         private ProgressDialog _uiWaitDialog;
         private System.Timers.Timer _uiWaitTimer = new(250);
         private readonly LogManager _logManager;
-        private int _commandHistoryTabIndex;
         private List<Shared.PackParser.MinecraftPackContainer> _incomingPacks;
         private byte _manPacksServer;
 
@@ -75,10 +75,11 @@ namespace MinecraftService.Client.Forms
                 Thread.Sleep(1000);
                 if (connectedHost != null && FormManager.TCPClient.EstablishedLink) {
                     ServerBusy = false;
-                    Invoke((MethodInvoker)delegate { RefreshAllCompenentStates(); });
                     _connectTimer.Enabled = false;
                     _connectTimer.Stop();
                     _connectTimer.Close();
+                    Invoke((MethodInvoker)delegate { RefreshAllCompenentStates(); });
+                    RefreshServerBoxContents();
                     return;
                 }
                 _connectTimeout++;
@@ -88,7 +89,7 @@ namespace MinecraftService.Client.Forms
                     _connectTimer.Stop();
                     _connectTimer.Close();
                     Invoke((MethodInvoker)delegate {
-                        RefreshServerContents();
+                        RefreshServerBoxContents();
                         HostInfoLabel.Text = $"Failed to connect to host!";
                         Connect.Enabled = true;
                         RefreshAllCompenentStates();
@@ -166,7 +167,7 @@ namespace MinecraftService.Client.Forms
             Application.Run(FormManager.MainWindow);
         }
 
-        public void RefreshServerContents() {
+        public void RefreshServerBoxContents() {
             Invoke((MethodInvoker)delegate {
                 Refresh();
                 HostInfoLabel.Text = $"Connected to host:";
@@ -182,15 +183,18 @@ namespace MinecraftService.Client.Forms
 
                     if (ServerSelectBox.Items.Count > 0) {
                         ServerSelectBox.SelectedIndex = 0;
-                        selectedServer = connectedHost.GetServerInfoByName((string)ServerSelectBox.SelectedItem);
-                        FormManager.TCPClient.SendData(FormManager.MainWindow.connectedHost.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.ServerStatusRequest);
+                        SelectedServer = connectedHost.GetServerInfoByName((string)ServerSelectBox.SelectedItem);
+                        FormManager.TCPClient.SendData(FormManager.MainWindow.connectedHost.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.ServerStatusRequest);
+                    } else {
+                        SelectedServer = null;
+                        Invoke(() => UpdateServerLogBox(LogBox, ""));
                     }
                 }
                 return;
             });
         }
 
-        public void RecieveExportData(ExportImportFileModel file) {
+        public Task RecieveExportData(ExportImportFileModel file) => Task.Run(() => {
             if (file == null) {
                 return;
             }
@@ -204,7 +208,7 @@ namespace MinecraftService.Client.Forms
                     RestoreDirectory = true,
                     Title = "Save exported file..."
                 };
-                if (saveFileDialog.ShowDialog() == DialogResult.OK) {
+                if (Invoke(saveFileDialog.ShowDialog) == DialogResult.OK) {
                     File.WriteAllBytes(saveFileDialog.FileName, file.Data);
                 }
             }
@@ -215,14 +219,14 @@ namespace MinecraftService.Client.Forms
                     RestoreDirectory = true,
                     Title = "Save exported file..."
                 };
-                if (saveFileDialog.ShowDialog() == DialogResult.OK) {
+                if (Invoke(saveFileDialog.ShowDialog) == DialogResult.OK) {
                     File.WriteAllBytes(saveFileDialog.FileName, file.Data);
                 }
             }
-        }
+        });
 
         public void BackupRollbackCompleted(bool backupPassed) {
-            if(_backupManager != null) {
+            if (_backupManager != null) {
                 _backupManager.MarkRollbackComplete(backupPassed);
             }
         }
@@ -244,7 +248,7 @@ namespace MinecraftService.Client.Forms
         }
 
         public void ClientLogUpdate() {
-            if(!_enableLogUpdating) { return; }
+            if (!_enableLogUpdating) { return; }
             try {
                 Invoke(() => {
                     UpdateServerLogBox(clientLogBox, ProcessText(FormManager.ClientLogContainer.GetLog()));
@@ -270,7 +274,7 @@ namespace MinecraftService.Client.Forms
                 RefreshAllCompenentStates();
             } catch (InvalidOperationException) { }
 
-            selectedServer = null;
+            SelectedServer = null;
             connectedHost = null;
         }
 
@@ -280,9 +284,12 @@ namespace MinecraftService.Client.Forms
                 curPos = GetScrollPosition(targetBox);
                 targetBox.Text = contents;
                 SetScrollPosition(targetBox, curPos);
+                if (_followTail) {
+                    ScrollToEnd(targetBox);
+                }
+            } else {
+                targetBox.Text = contents;
             }
-            if (_followTail)
-                ScrollToEnd(targetBox);
         }
 
         private static void OnExit(object sender, EventArgs e) {
@@ -296,7 +303,7 @@ namespace MinecraftService.Client.Forms
                 FormManager.TCPClient.SendData(NetworkMessageTypes.Disconnect);
                 ClientLogger.AppendLine("Closing connection...");
                 FormManager.TCPClient.CloseConnection();
-                selectedServer = null;
+                SelectedServer = null;
                 connectedHost = null;
             }
         }
@@ -314,7 +321,7 @@ namespace MinecraftService.Client.Forms
             if (connectedHost != null) {
                 foreach (IServerConfiguration server in connectedHost.GetServerList()) {
                     if (ServerSelectBox.SelectedItem != null && ServerSelectBox.SelectedItem.ToString() == server.GetServerName()) {
-                        selectedServer = server;
+                        SelectedServer = server;
                         FormManager.TCPClient.SendData(connectedHost.GetServerIndex(server), NetworkMessageTypes.EnumBackups);
                     }
                 }
@@ -323,7 +330,7 @@ namespace MinecraftService.Client.Forms
         }
 
         private void SingBackup_Click(object sender, EventArgs e) {
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.Backup);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.Backup);
             DisableUI("Performing server backup...");
         }
 
@@ -332,7 +339,7 @@ namespace MinecraftService.Client.Forms
         }
 
         private void RestartSrv_Click(object sender, EventArgs e) {
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.Restart);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.Restart);
             DisableUI("Restarting a server...");
         }
 
@@ -350,30 +357,31 @@ namespace MinecraftService.Client.Forms
         }
 
         private void RemoveSrvBtn_Click(object sender, EventArgs e) {
-            if (ServerSelectBox.Items.Count < 2) {
-                FormManager.Logger.AppendLine("Server removal failed! You must have at least one active server!");
-                MessageBox.Show("Server removal failed! You must have at least one active server!");
-                return; 
+            if (ServerSelectBox.Items.Count < 1) {
+                FormManager.Logger.AppendLine("Server removal failed! You have no active servers!");
+                MessageBox.Show("Server removal failed! You have no active servers!");
+                return;
             }
             using (RemoveServerControl form = new()) {
                 if (form.ShowDialog() == DialogResult.OK) {
-                    FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.RemoveServer, form.SelectedFlag);
+                    FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.RemoveServer, form.SelectedFlag);
                     form.Close();
-                    connectedHost.RemoveServerInfo(selectedServer);
+                    connectedHost.RemoveServerInfo(SelectedServer);
                 }
             }
+            RefreshServerBoxContents();
             DisableUI("Service is removing a server...");
         }
 
         private void PlayerManager_Click(object sender, EventArgs e) {
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.PlayersRequest);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.PlayersRequest);
             DisableUI("Gathering players registered to server...");
         }
 
         private void Disconn_Click(object sender, EventArgs e) {
             _connectTimer.Stop();
             try {
-                if (selectedServer != null && _backupManager != null) {
+                if (SelectedServer != null && _backupManager != null) {
                     _backupManager.Close();
                     _backupManager.Dispose();
                 }
@@ -382,12 +390,14 @@ namespace MinecraftService.Client.Forms
                     Thread.Sleep(500);
                     FormManager.TCPClient.CloseConnection();
                 }
-                selectedServer = null;
+                SelectedServer = null;
                 connectedHost = null;
                 _logManager.SetConnectedHost(null);
-                LogBox.Invoke((MethodInvoker)delegate { LogBox.Text = ""; });
                 FormManager.MainWindow.Invoke((MethodInvoker)delegate {
                     RefreshAllCompenentStates();
+                    _logManager.ResetServerServiceLogCounts();
+                    LogBox.Text = "";
+                    serviceTextbox.Text = "";
                     ServerSelectBox.Items.Clear();
                     ServerSelectBox.SelectedIndex = -1;
                     ServerInfoBox.Text = "";
@@ -411,7 +421,7 @@ namespace MinecraftService.Client.Forms
             // send the command to the server
             if (cmdTextBox.Text.Length > 0 && connectedHost != null) {
                 byte[] msg = Encoding.UTF8.GetBytes(cmdTextBox.Text);
-                FormManager.TCPClient.SendData(msg, connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.Command);
+                FormManager.TCPClient.SendData(msg, connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.Command);
             }
             _distanceFromLastCommand = 0;
             logPageControl.SelectedTab = logPageControl.TabPages[0];
@@ -423,7 +433,7 @@ namespace MinecraftService.Client.Forms
         }
 
         private void ChkUpdates_Click(object sender, EventArgs e) {
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.CheckUpdates);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.CheckUpdates);
             DisableUI("Service is checking updates for a server...");
         }
 
@@ -462,12 +472,12 @@ namespace MinecraftService.Client.Forms
 
         public void RefreshAllCompenentStates() {
             bool hostConnectedIdle = connectedHost != null && !ServerBusy;
-            bool serverConnectedIdle = connectedHost != null && selectedServer != null && !ServerBusy;
+            bool serverConnectedIdle = connectedHost != null && SelectedServer != null && !ServerBusy;
             Connect.Enabled = connectedHost == null;
             Disconn.Enabled = connectedHost != null;
             newSrvBtn.Enabled = hostConnectedIdle;
-            ChkUpdates.Enabled = hostConnectedIdle;
-            GlobBackup.Enabled = hostConnectedIdle;
+            ChkUpdates.Enabled = serverConnectedIdle;
+            GlobBackup.Enabled = serverConnectedIdle;
             BackupManagerBtn.Enabled = serverConnectedIdle;
             nbtStudioBtn.Enabled = serverConnectedIdle;
             ManPacks.Enabled = serverConnectedIdle;
@@ -478,15 +488,15 @@ namespace MinecraftService.Client.Forms
             SingBackup.Enabled = serverConnectedIdle;
             SendCmd.Enabled = serverConnectedIdle;
             cmdTextBox.Enabled = serverConnectedIdle;
-            RestartSrv.Enabled = serverConnectedIdle && selectedServer.GetStatus() != null && selectedServer.GetStatus().ServerStatus == ServerStatus.Started;
+            RestartSrv.Enabled = serverConnectedIdle && SelectedServer.GetStatus() != null && SelectedServer.GetStatus().ServerStatus == ServerStatus.Started;
             startStopBtn.Enabled = serverConnectedIdle;
             startStopBtn.ForeColor = serverConnectedIdle && !IsPrimaryServer() ?
                 System.Drawing.Color.Black :
                 System.Drawing.Color.LightGray;
 
-            startStopBtn.Text = selectedServer == null ?
+            startStopBtn.Text = SelectedServer == null ?
                 "Start/Stop" :
-                selectedServer.GetStatus() != null && selectedServer.GetStatus().ServerStatus == ServerStatus.Stopped ?
+                SelectedServer.GetStatus() != null && SelectedServer.GetStatus().ServerStatus == ServerStatus.Stopped ?
                 "Start" :
                 "Stop";
 
@@ -526,16 +536,14 @@ namespace MinecraftService.Client.Forms
 
         public void VersionListArrived(Dictionary<MinecraftServerArch, SimpleVersionModel[]> verLists) {
             ServerBusy = false;
-            _uiWaitDialog.SetCallback(new(new(() => {
-                using (_newServerForm = new(clientSideServiceConfiguration, connectedHost.GetServerList(), verLists)) {
-                    if (_newServerForm.ShowDialog() == DialogResult.OK) {
-                        byte[] serializeToBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(_newServerForm.SelectedPropModel, Formatting.Indented, GlobalJsonSerialierSettings));
-                        FormManager.TCPClient.SendData(serializeToBytes, NetworkMessageTypes.AddNewServer);
-                        _newServerForm.Close();
-                        _newServerForm.Dispose();
-                    }
+            using (_newServerForm = new(clientSideServiceConfiguration, connectedHost.GetServerList(), verLists)) {
+                if (_newServerForm.ShowDialog() == DialogResult.OK) {
+                    byte[] serializeToBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(_newServerForm.SelectedPropModel, Formatting.Indented, GlobalJsonSerialierSettings));
+                    FormManager.TCPClient.SendData(serializeToBytes, NetworkMessageTypes.AddNewServer);
+                    _newServerForm.Close();
+                    _newServerForm.Dispose();
                 }
-            })));
+            }
         }
 
         public void RecievePackData(byte serverIndex, List<Shared.PackParser.MinecraftPackContainer> incomingPacks) {
@@ -546,9 +554,9 @@ namespace MinecraftService.Client.Forms
 
         public void RecievePlayerData(byte serverIndex, List<IPlayer> playerList) {
             ServerBusy = false;
-            _uiWaitDialog.SetCallback(new(() => { 
+            _uiWaitDialog.SetCallback(new(() => {
                 connectedHost.GetServerInfoByIndex(serverIndex).SetPlayerList(playerList);
-                PlayerManagerForm form = new(selectedServer);
+                PlayerManagerForm form = new(SelectedServer);
                 form.ShowDialog();
             }));
         }
@@ -593,7 +601,7 @@ namespace MinecraftService.Client.Forms
         }
 
         private void BackupManager_Click(object sender, EventArgs e) {
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.EnumBackups);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.EnumBackups);
             if (_backupManager == null || _backupManager.IsDisposed) {
                 _backupManager = new BackupManagerForm();
             }
@@ -604,7 +612,7 @@ namespace MinecraftService.Client.Forms
         public void UpdateBackupManagerData(List<BackupInfoModel> backupInfo) => _backupManager?.UpdateBackupManagerData(backupInfo);
 
         private void ManPacks_Click(object sender, EventArgs e) {
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.PackList);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.PackList);
             DisableUI("Service is gathering current pack information...", new(() => {
                 ManagePacksForms form = new(_manPacksServer, ClientLogger, _processInfo);
                 form.PopulateServerData(_incomingPacks);
@@ -624,16 +632,16 @@ namespace MinecraftService.Client.Forms
                     } else return;
                 }
             ServerBusy = true;
-            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.LevelEditRequest);
+            FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.LevelEditRequest);
             DisableUI("Service is gathering level.dat...");
         }
 
-        public void LevelDatRecieved (string path) {
+        public void LevelDatRecieved(string path) {
             using (Process nbtStudioProcess = new()) {
                 nbtStudioProcess.StartInfo = new ProcessStartInfo(ConfigManager.NBTStudioPath, path);
                 nbtStudioProcess.Start();
                 nbtStudioProcess.WaitForExit();
-                FormManager.TCPClient.SendData(File.ReadAllBytes(path), connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.LevelEditFile);
+                FormManager.TCPClient.SendData(File.ReadAllBytes(path), connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.LevelEditFile);
             }
             ServerBusy = false;
         }
@@ -659,7 +667,7 @@ namespace MinecraftService.Client.Forms
         private void startStopBtn_Click(object sender, EventArgs e) {
             if (!IsPrimaryServer()) {
                 DisableUI("Starting/Stopping a server...");
-                FormManager.TCPClient.SendData(connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.StartStop);
+                FormManager.TCPClient.SendData(connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.StartStop);
             } else {
                 startStopBtnToolTip.Active = true;
                 startStopBtnToolTip.Show("Start/Stop feature is disabled to servers using the primary ports 19132 and 19133.", startStopBtn, 2000);
@@ -671,17 +679,17 @@ namespace MinecraftService.Client.Forms
         }
 
         private bool IsPrimaryServer() {
-            return selectedServer.IsPrimaryServer();
+            return SelectedServer.IsPrimaryServer();
         }
 
         private void serverPropMenuItem_Click(object sender, EventArgs e) {
             using (PropEditorForm _editDialog = new()) {
-                _editDialog.PopulateBoxes(selectedServer.GetAllProps());
+                _editDialog.PopulateBoxes(SelectedServer.GetAllProps());
                 if (_editDialog.ShowDialog() == DialogResult.OK) {
                     JsonSerializerSettings settings = new() { TypeNameHandling = TypeNameHandling.All };
                     byte[] serializeToBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(_editDialog.workingProps, Formatting.Indented, settings));
-                    FormManager.TCPClient.SendData(serializeToBytes, connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.PropUpdate);
-                    selectedServer.SetAllProps(_editDialog.workingProps);
+                    FormManager.TCPClient.SendData(serializeToBytes, connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.PropUpdate);
+                    SelectedServer.SetAllProps(_editDialog.workingProps);
                 }
             }
             ServerBusy = false;
@@ -689,13 +697,13 @@ namespace MinecraftService.Client.Forms
 
         private void startCmdMenuItem_Click(object sender, EventArgs e) {
             PropEditorForm editSrvDialog = new();
-            editSrvDialog.PopulateStartCmds(selectedServer.GetStartCommands());
+            editSrvDialog.PopulateStartCmds(SelectedServer.GetStartCommands());
             if (editSrvDialog.ShowDialog() == DialogResult.OK) {
                 JsonSerializerSettings settings = new() { TypeNameHandling = TypeNameHandling.All };
                 byte[] serializeToBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(editSrvDialog.startCmds, Formatting.Indented, settings));
                 DisableUI("Getting current server start commands from service...");
-                FormManager.TCPClient.SendData(serializeToBytes, connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.StartCmdUpdate);
-                selectedServer.SetStartCommands(editSrvDialog.startCmds);
+                FormManager.TCPClient.SendData(serializeToBytes, connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.StartCmdUpdate);
+                SelectedServer.SetStartCommands(editSrvDialog.startCmds);
                 editSrvDialog.Close();
                 editSrvDialog.Dispose();
             }
@@ -704,14 +712,14 @@ namespace MinecraftService.Client.Forms
         private void servicePropMenuItem_Click(object sender, EventArgs e) {
             using (PropEditorForm _editDialog = new()) {
                 List<string> serviceConfigExcludeList = new() { "ServerName", "ServerExeName", "FileName", "ServerPath", "DeployedVersion" };
-                List<Property> filteredProps = new List<Property>(selectedServer.GetSettingsList()
+                List<Property> filteredProps = new List<Property>(SelectedServer.GetSettingsList()
                             .Where(x => !serviceConfigExcludeList.Contains(x.KeyName)));
                 _editDialog.PopulateBoxes(filteredProps);
                 if (_editDialog.ShowDialog() == DialogResult.OK) {
                     JsonSerializerSettings settings = new() { TypeNameHandling = TypeNameHandling.All };
                     byte[] serializeToBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(_editDialog.workingProps, Formatting.Indented, settings));
-                    FormManager.TCPClient.SendData(serializeToBytes, connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.PropUpdate);
-                    selectedServer.SetAllSettings(_editDialog.workingProps);
+                    FormManager.TCPClient.SendData(serializeToBytes, connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.PropUpdate);
+                    SelectedServer.SetAllSettings(_editDialog.workingProps);
                 }
             }
             ServerBusy = false;
@@ -738,7 +746,7 @@ namespace MinecraftService.Client.Forms
                 PackageFlags = PackageFlags.ConfigFile
             };
             byte[] serializedBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model));
-            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.ExportFile);
+            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.ExportFile);
         }
 
         private void importableBackupToolStripMenuItem_Click(object sender, EventArgs e) {
@@ -747,7 +755,7 @@ namespace MinecraftService.Client.Forms
                 PackageFlags = PackageFlags.LastBackup
             };
             byte[] serializedBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model));
-            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.ExportFile);
+            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.ExportFile);
         }
 
         private void importableBackupWithPacksToolStripMenuItem_Click(object sender, EventArgs e) {
@@ -756,7 +764,7 @@ namespace MinecraftService.Client.Forms
                 PackageFlags = PackageFlags.WorldPacks
             };
             byte[] serializedBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model));
-            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.ExportFile);
+            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.ExportFile);
         }
 
         private void fullServerPackageToolStripMenuItem_Click(object sender, EventArgs e) {
@@ -765,7 +773,7 @@ namespace MinecraftService.Client.Forms
                 PackageFlags = PackageFlags.Full
             };
             byte[] serializedBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model));
-            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.ExportFile);
+            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.ExportFile);
         }
 
         private void serviceConfigFileToolStripMenuItem1_Click(object sender, EventArgs e) {
@@ -774,7 +782,7 @@ namespace MinecraftService.Client.Forms
                 PackageFlags = PackageFlags.ConfigFile
             };
             byte[] serializedBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model));
-            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(selectedServer), NetworkMessageTypes.ExportFile);
+            FormManager.TCPClient.SendData(serializedBytes, FormManager.MainWindow.connectedHost.GetServerIndex(SelectedServer), NetworkMessageTypes.ExportFile);
         }
 
         private void serverPackageFileToolStripMenuItem_Click(object sender, EventArgs e) {

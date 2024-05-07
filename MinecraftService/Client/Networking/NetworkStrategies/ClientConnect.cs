@@ -1,4 +1,8 @@
-﻿using System;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System;
 using System.Text;
 using System.Threading.Tasks;
 using MinecraftService.Client.Management;
@@ -23,7 +27,7 @@ namespace MinecraftService.Client.Networking.NetworkStrategies {
                     _logger.AppendLine("Connection to Host successful!");
                     FormManager.MainWindow.connectedHost = JsonConvert.DeserializeObject<IServiceConfiguration>(data, SharedStringBase.GlobalJsonSerialierSettings);
                     _client.Connected = true;
-                    FormManager.MainWindow.RefreshServerContents();
+                    FormManager.MainWindow.RefreshServerBoxContents();
                     FormManager.MainWindow.ServerBusy = false;
                     return true;
                 }

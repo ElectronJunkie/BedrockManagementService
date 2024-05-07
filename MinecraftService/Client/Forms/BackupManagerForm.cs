@@ -1,8 +1,7 @@
-﻿using MinecraftService.Client.Management;
-using MinecraftService.Shared.Classes;
-using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.SerializeModels;
-using Newtonsoft.Json;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -11,6 +10,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using MinecraftService.Client.Management;
+using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Interfaces;
+using MinecraftService.Shared.SerializeModels;
+using Newtonsoft.Json;
 
 namespace MinecraftService.Client.Forms {
     public partial class BackupManagerForm : Form {
@@ -50,7 +54,7 @@ namespace MinecraftService.Client.Forms {
                 return;
             }
             byte[] backupName = Encoding.UTF8.GetBytes(backupSelectBox.Text);
-            FormManager.TCPClient.SendData(backupName, _serviceConfig.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.DelBackups);
+            FormManager.TCPClient.SendData(backupName, _serviceConfig.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.DelBackups);
             Task.Delay(500).Wait();
             backupSelectBox.Items.Remove(backupSelectBox.SelectedItem);
         }
@@ -62,7 +66,7 @@ namespace MinecraftService.Client.Forms {
             closeBtn.Enabled = false;
             infoTextBox.Lines = new string[4] { string.Empty, string.Empty, string.Empty, "Now rolling back to selected backup... Please wait!" };
             byte[] backupName = Encoding.UTF8.GetBytes(backupSelectBox.Text);
-            FormManager.TCPClient.SendData(backupName, _serviceConfig.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.BackupRollback);
+            FormManager.TCPClient.SendData(backupName, _serviceConfig.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.BackupRollback);
         }
 
         private void exportToolStripMenuItem_Click(object sender, EventArgs e) {
@@ -82,7 +86,7 @@ namespace MinecraftService.Client.Forms {
                 _callbackRecieved = false;
                 string[] newText = new string[4];
                 newText[3] = "Downloading your selection now, please wait!";
-                FormManager.TCPClient.SendData(dataBytes, _serviceConfig.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.ExportFile);
+                FormManager.TCPClient.SendData(dataBytes, _serviceConfig.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.ExportFile);
                 while (!_callbackRecieved) {
                     Task.Delay(500).Wait();
                 }
@@ -96,17 +100,17 @@ namespace MinecraftService.Client.Forms {
 
         private void purgeBackupsToolStripMenuItem_Click(object sender, EventArgs e) {
             if (MessageBox.Show("This will remove all backups from the server. This is irrevesable!!", "Confirm removal", MessageBoxButtons.YesNo, MessageBoxIcon.Error) == DialogResult.Yes) {
-                FormManager.TCPClient.SendData(Encoding.UTF8.GetBytes("-RemoveAll-"), _serviceConfig.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.DelBackups);
+                FormManager.TCPClient.SendData(Encoding.UTF8.GetBytes("-RemoveAll-"), _serviceConfig.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.DelBackups);
             }
         }
 
         private void editServerBackupSettingsToolStripMenuItem_Click(object sender, EventArgs e) {
             using PropEditorForm editor = new();
-            List<Property> filteredList = new List<Property>(FormManager.MainWindow.selectedServer.GetSettingsList().Where(x => x.KeyName.Contains("Backup")).ToList());
+            List<Property> filteredList = new List<Property>(FormManager.MainWindow.SelectedServer.GetSettingsList().Where(x => x.KeyName.Contains("Backup")).ToList());
             editor.PopulateBoxes(filteredList);
             if (editor.ShowDialog() == DialogResult.OK) {
                 byte[] serializedBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(editor.workingProps));
-                FormManager.TCPClient.SendData(serializedBytes, _serviceConfig.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.PropUpdate);
+                FormManager.TCPClient.SendData(serializedBytes, _serviceConfig.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.PropUpdate);
                 MessageBox.Show("Backup settings sent to service! Restart server to apply.");
             }
         }
@@ -135,8 +139,8 @@ namespace MinecraftService.Client.Forms {
             if (backupSelectBox.SelectedItem != null && closeBtn.Enabled) {
                 string[] displayTextStrings = new string[8];
                 ((BackupInfoModel)backupSelectBox.SelectedItem).GetBackupInfo().CopyTo(displayTextStrings, 0);
-                displayTextStrings[6] = $"Total backups contained in this server: {FormManager.MainWindow.selectedServer.GetStatus().TotalBackups}";
-                displayTextStrings[7] = $"Total backups size for this server: {FormManager.MainWindow.selectedServer.GetStatus().TotalSizeOfBackups / 1000} MB";
+                displayTextStrings[6] = $"Total backups contained in this server: {FormManager.MainWindow.SelectedServer.GetStatus().TotalBackups}";
+                displayTextStrings[7] = $"Total backups size for this server: {FormManager.MainWindow.SelectedServer.GetStatus().TotalSizeOfBackups / 1000} MB";
                 infoTextBox.Lines = displayTextStrings;
                 infoTextBox.Refresh();
             }

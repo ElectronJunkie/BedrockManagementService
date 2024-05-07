@@ -1,14 +1,17 @@
-﻿using MinecraftService.Shared.Classes;
-using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.SerializeModels;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Interfaces;
+using MinecraftService.Shared.SerializeModels;
 using static MinecraftService.Shared.Classes.SharedStringBase;
 
 namespace MinecraftService.Client.Management {
@@ -43,19 +46,19 @@ namespace MinecraftService.Client.Management {
                             sendString.Append($"{server.GetSettingsProp(ServerPropertyKeys.ServerName)}|;|{server.GetLog().Count}|?|");
                         }
                         sendString.Append($"Service|;|{_connectedHost.GetLog().Count}");
-                        int serverCount = FormManager.MainWindow.selectedServer == null || FormManager.MainWindow.selectedServer.GetLog() == null ? 0 : FormManager.MainWindow.selectedServer.GetLog().Count;
+                        int serverCount = FormManager.MainWindow.SelectedServer == null || FormManager.MainWindow.SelectedServer.GetLog() == null ? 0 : FormManager.MainWindow.SelectedServer.GetLog().Count;
                         int serviceCount = _connectedHost.GetLog() == null ? 0 : _connectedHost.GetLog().Count;
                         byte[] stringsToBytes = Encoding.UTF8.GetBytes(sendString.ToString());
                         FormManager.TCPClient.SendData(stringsToBytes, NetworkMessageTypes.ConsoleLogUpdate);
-                        FormManager.TCPClient.SendData(FormManager.MainWindow.connectedHost.GetServerIndex(FormManager.MainWindow.selectedServer), NetworkMessageTypes.ServerStatusRequest);
+                        FormManager.TCPClient.SendData(FormManager.MainWindow.connectedHost.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.ServerStatusRequest);
                         Task.Delay(300).Wait();
 
-                        if (FormManager.MainWindow.selectedServer == null) {
+                        if (FormManager.MainWindow.SelectedServer == null) {
                             UpdateLogBoxInvoked(FormManager.MainWindow.LogBox, "");
                         } else {
-                            if(FormManager.MainWindow.selectedServer.GetStatus() != null) {
+                            if (FormManager.MainWindow.SelectedServer.GetStatus() != null) {
                                 Task.Run(() => {
-                                    IServerConfiguration serverConfiguration = FormManager.MainWindow.selectedServer;
+                                    IServerConfiguration serverConfiguration = FormManager.MainWindow.SelectedServer;
                                     bool autoStartEnabled = serverConfiguration.GetSettingsProp(ServerPropertyKeys.ServerAutostartEnabled).GetBoolValue();
                                     ServerStatusModel status = serverConfiguration.GetStatus();
                                     ServiceStatusModel serviceStatus = FormManager.MainWindow.ServiceStatus;
@@ -85,15 +88,19 @@ namespace MinecraftService.Client.Management {
                         if (_connectedHost.GetLog().Count != currentServiceLogLength) {
                             UpdateLogBoxInvoked(FormManager.MainWindow.serviceTextbox, ProcessText(_connectedHost.GetLog()));
                         }
-                        if (FormManager.MainWindow.selectedServer != null && FormManager.MainWindow.selectedServer.GetLog() != null && FormManager.MainWindow.selectedServer.GetLog().Count != currentServerLogLength) {
-                            UpdateLogBoxInvoked(FormManager.MainWindow.LogBox, ProcessText(FormManager.MainWindow.selectedServer.GetLog()));
+                        if (FormManager.MainWindow.SelectedServer != null && FormManager.MainWindow.SelectedServer.GetLog() != null && FormManager.MainWindow.SelectedServer.GetLog().Count != currentServerLogLength) {
+                            UpdateLogBoxInvoked(FormManager.MainWindow.LogBox, ProcessText(FormManager.MainWindow.SelectedServer.GetLog()));
+                        }
+                        if(FormManager.MainWindow.connectedHost != null && FormManager.MainWindow.connectedHost.GetServerList().Count == 0) {
+                            UpdateLogBoxInvoked(FormManager.MainWindow.ServerInfoBox, "There are no configured servers.\r\nPlease use \"Add new Server\" button.");
                         }
                         currentServerLogLength = serverCount;
                         currentServiceLogLength = serviceCount;
                         currentClientLogLength = clientCount;
                     }
+                    Task.Delay(300).Wait();
                 } catch (Exception e) {
-                    _logger.AppendLine($"LogManager Error! Stacetrace: {e.StackTrace}");
+                    _logger.AppendLine($"LogManager Error! {e.Message}\n{e.StackTrace}");
                 }
             }
         }
@@ -109,6 +116,11 @@ namespace MinecraftService.Client.Management {
             DisplayTimestamps = FormManager.MainWindow.ConfigManager.DisplayTimestamps;
             _logTaskCancelSource = new CancellationTokenSource();
             return StartLogThread();
+        }
+
+        public void ResetServerServiceLogCounts() {
+            currentServerLogLength = 0;
+            currentServiceLogLength = 0;
         }
 
         public void SetConnectedHost(IServiceConfiguration host) => _connectedHost = host;

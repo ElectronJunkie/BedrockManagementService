@@ -1,20 +1,19 @@
-﻿using MinecraftService.Client.Forms;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System;
+using System.Collections.Generic;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using MinecraftService.Client.Forms;
 using MinecraftService.Client.Management;
 using MinecraftService.Shared.Classes;
 using MinecraftService.Shared.Interfaces;
 using MinecraftService.Shared.PackParser;
 using MinecraftService.Shared.SerializeModels;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace MinecraftService.Client.Networking {
     public class TCPClient {
@@ -65,8 +64,8 @@ namespace MinecraftService.Client.Networking {
                 stream = OpenedTcpClient.GetStream();
                 EstablishedLink = true;
                 _heartbeatTimer.Start();
-               // ClientReciever = Task.Factory.StartNew(new Action(ReceiveListener), _netCancelSource.Token);
-            } catch(Exception e) {
+                // ClientReciever = Task.Factory.StartNew(new Action(ReceiveListener), _netCancelSource.Token);
+            } catch (Exception e) {
                 _logger.AppendLine($"Could not connect to Server: {e.Message}");
                 if (ClientReciever != null)
                     _netCancelSource.Cancel();
@@ -75,7 +74,7 @@ namespace MinecraftService.Client.Networking {
             }
             return EstablishedLink;
         }
-        
+
         public void CloseConnection() {
             try {
                 if (stream != null)
@@ -94,7 +93,7 @@ namespace MinecraftService.Client.Networking {
         }
 
         public void RecieveEvent(object sender, System.Timers.ElapsedEventArgs elapsedArgs) {
-            if (_netCancelSource.IsCancellationRequested) {
+            if (_netCancelSource != null && _netCancelSource.IsCancellationRequested) {
                 _heartbeatTimer.Stop();
                 return;
             }
@@ -111,22 +110,24 @@ namespace MinecraftService.Client.Networking {
                     int originalLen = expectedLen;
                     buffer = new byte[expectedLen];
                     if (expectedLen > 102400000 && !FormManager.MainWindow.ServerBusy) {
-                        if(_progressDialog == null || _progressDialog.IsDisposed) {
+                        if (_progressDialog == null || _progressDialog.IsDisposed) {
                             _progressDialog = new(null);
-                        } 
-                        _progressDialog.Show();
+                        }
+                        FormManager.MainWindow.Invoke(_progressDialog.Show);
+
                         _progressDialog.GetDialogProgress().Report(new("Downloading large file from service...", 0.0));
                         double chunkCount = Math.Round(expectedLen / 1024000.00, 0, MidpointRounding.ToPositiveInfinity);
                         double currentProgress = 0.0;
                         do {
+
                             int recvCount = expectedLen >= 1024000 ? 1024000 : expectedLen;
                             byteCount = stream.Read(buffer, originalLen - expectedLen, recvCount);
-                            _progressDialog.GetDialogProgress().Report(new($"Downloading large file from service, {originalLen - expectedLen} bytes recieved.", currentProgress));
+                            _progressDialog.GetDialogProgress().Report(new($"Downloading large file from service, {(originalLen - expectedLen) / 1024} bytes recieved.", currentProgress));
                             expectedLen -= recvCount;
                         } while (expectedLen > 0);
                         _progressDialog.EndProgress(new(() => {
-                            _progressDialog.Invoke(_progressDialog.Close);
-                            _progressDialog.Invoke(_progressDialog.Dispose);
+                            FormManager.MainWindow.Invoke(_progressDialog.Close);
+                            FormManager.MainWindow.Invoke(_progressDialog.Dispose);
                             _progressDialog = null;
                         }));
                     } else {

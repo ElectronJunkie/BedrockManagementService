@@ -1,19 +1,22 @@
-﻿using MinecraftService.Client.Management;
-using MinecraftService.Shared.Classes;
-using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.JsonModels.LiteLoaderJsonModels;
-using MinecraftService.Shared.PackParser;
-using MinecraftService.Shared.Utilities;
-using Newtonsoft.Json;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System;
 using System.Collections.Generic;
-using System.DirectoryServices.ActiveDirectory;
 using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using MinecraftService.Client.Management;
+using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Interfaces;
+using MinecraftService.Shared.JsonModels.LiteLoaderJsonModels;
+using MinecraftService.Shared.PackParser;
+using MinecraftService.Shared.Utilities;
+using Newtonsoft.Json;
 
 namespace MinecraftService.Client.Forms {
     public partial class ManagePacksForms : Form {
@@ -23,7 +26,7 @@ namespace MinecraftService.Client.Forms {
         private readonly DirectoryInfo _packExtractDir;
         public ManagePacksForms(byte serverIndex, IServerLogger logger, IProcessInfo processInfo) {
             _logger = logger;
-            _packExtractDir = new DirectoryInfo($"{Path.GetTempPath()}{FileUtilities.GetRandomPrefix()}MMSTemp\\ExaminePacks");
+            _packExtractDir = new DirectoryInfo(SharedStringBase.GetNewTempDirectory("PackManager"));
             _processInfo = processInfo;
             _serverIndex = serverIndex;
             InitializeComponent();
@@ -94,7 +97,7 @@ namespace MinecraftService.Client.Forms {
                             foreach (MinecraftPackContainer container in parser.FoundPacks) {
                                 parsedPacksListBox.Items.Add(container);
                             }
-                            progressDialog.EndProgress(null);
+                            progressDialog.EndProgress(new(() => { progressDialog.Invoke(progressDialog.Close); }));
                         });
                     });
                 }));
@@ -130,7 +133,7 @@ namespace MinecraftService.Client.Forms {
                 parsedPacksListBox.SetItemChecked(i, true);
             }
         }
-       
+
         private void uncheckAllServerButton_Click(object sender, EventArgs e) {
             for (int i = 0; i < serverListBox.Items.Count; i++) {
                 serverListBox.SetItemChecked(i, false);

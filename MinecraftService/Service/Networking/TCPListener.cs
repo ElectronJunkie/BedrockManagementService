@@ -213,11 +213,11 @@ namespace MinecraftService.Service.Networking {
                                         SendData(_flaggedMessageLookup[msgType].ParseMessage(buffer, serverIndex, msgFlag));
 
                                 } catch (Exception e) {
-                                    _logger.AppendLine($"{e.Message} {e.StackTrace}");
+                                    _logger.AppendLine($"TCPListener ParseMessage (MsgType: {msgType}) event caught error:\n{e.Message}\n{e.StackTrace}");
                                 }
                             }
                         }
-                        Task.Delay(500).Wait();
+                         Task.Delay(500).Wait();
                     } catch (OutOfMemoryException) {
                         _logger.AppendLine("Out of memory exception thrown.");
                     } catch (ObjectDisposedException) {
@@ -235,6 +235,6 @@ namespace MinecraftService.Service.Networking {
             }, _cancelTokenSource.Token);
         }
 
-        
+
     }
 }

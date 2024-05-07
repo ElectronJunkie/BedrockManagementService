@@ -1,7 +1,6 @@
 ﻿using MinecraftService.Shared.Classes;
 using MinecraftService.Shared.JsonModels.LiteLoaderJsonModels;
 using MinecraftService.Shared.SerializeModels;
-using System;
 using System.Collections.Generic;
 using static MinecraftService.Shared.Classes.SharedStringBase;
 
@@ -32,7 +31,6 @@ namespace MinecraftService.Shared.Interfaces {
         void SetSettingsProp(string key, string value);
         List<Property> GetSettingsList();
         void SetAllSettings(List<Property> settingsList);
-        bool ValidateServerPropFile(string version);
         void UpdateServerProps(string version);
         void ProcessNewServerConfiguration();
         string GetDeployedVersion();
