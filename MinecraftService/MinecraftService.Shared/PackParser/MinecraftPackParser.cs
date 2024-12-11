@@ -1,6 +1,6 @@
-using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Classes.Service.Core;
 using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.JsonModels.MinecraftJsonModels;
+using MinecraftService.Shared.JsonModels.Minecraft;
 using MinecraftService.Shared.Utilities;
 using Newtonsoft.Json;
 using System;
@@ -9,11 +9,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MinecraftService.Shared.PackParser {
+namespace MinecraftService.Shared.PackParser
+{
     public class MinecraftPackParser {
         public string PackExtractDirectory;
         public List<MinecraftPackContainer> FoundPacks = new();
-        private readonly IServerLogger _serverLogger;
+        private readonly MmsLogger _serverLogger;
         private IProgress<ProgressModel> _progress;
         private bool isClient = false;
 
@@ -22,7 +23,7 @@ namespace MinecraftService.Shared.PackParser {
             _progress = new Progress<ProgressModel>();
         }
 
-        public MinecraftPackParser(IServerLogger logger, IProgress<ProgressModel> progress, string extractDir = "") {
+        public MinecraftPackParser(MmsLogger logger, IProgress<ProgressModel> progress, string extractDir = "") {
             _progress = progress;
             _serverLogger = logger;
             PackExtractDirectory = extractDir != string.Empty ? extractDir : SharedStringBase.GetNewTempDirectory("PackExtract");

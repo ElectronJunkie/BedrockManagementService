@@ -1,31 +1,29 @@
 ﻿using MinecraftService.Service.Networking.Interfaces;
 using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Classes.Networking;
+using MinecraftService.Shared.Classes.Service;
+using MinecraftService.Shared.Classes.Service.Configuration;
+using MinecraftService.Shared.Classes.Service.Core;
 using Newtonsoft.Json;
 using System.Text;
-using static MinecraftService.Shared.Classes.SharedStringBase;
+using static MinecraftService.Shared.Classes.Service.Core.SharedStringBase;
 
-namespace MinecraftService.Service.Networking.NetworkStrategies {
-    public class VersionListRequest : IMessageParser {
+namespace MinecraftService.Service.Networking.NetworkStrategies
+{
+    public class VersionListRequest(MmsLogger logger, ServiceConfigurator serviceConfiguration) : IMessageParser {
 
-        private readonly ServiceConfigurator _serviceConfiguration;
-        private readonly IServerLogger _logger;
-
-        public VersionListRequest(IServerLogger logger, ServiceConfigurator serviceConfiguration) {
-            _serviceConfiguration = serviceConfiguration;
-            _logger = logger;
-        }
-
-        public (byte[] data, byte srvIndex, NetworkMessageTypes type) ParseMessage(byte[] data, byte serverIndex) {
+        public Message ParseMessage(Message message) {
             Dictionary<MinecraftServerArch, SimpleVersionModel[]> resultDictionary = new();
-            foreach (KeyValuePair<MinecraftServerArch, IUpdater> updaterKvp in _serviceConfiguration.GetUpdaterTable()) {
-                updaterKvp.Value.Initialize().Wait();
+            foreach (KeyValuePair<MinecraftServerArch, IUpdater> updaterKvp in serviceConfiguration.GetUpdaterTable()) {
+                if (!updaterKvp.Value.IsInitialized())
+                    updaterKvp.Value.Initialize().Wait();
                 List<SimpleVersionModel> verStrings = updaterKvp.Value.GetSimpleVersionList();
                 verStrings.Reverse();
                 resultDictionary.Add(updaterKvp.Key, verStrings.ToArray());
             }
             string jsonString = JsonConvert.SerializeObject(resultDictionary, SharedStringBase.GlobalJsonSerialierSettings);
             byte[] resultBytes = Encoding.UTF8.GetBytes(jsonString);
-            return (resultBytes, 0, NetworkMessageTypes.VersionListRequest);
+            return new(resultBytes, message.ServerIndex, MessageTypes.VersionListRequest);
         }
     }
 }

@@ -1,23 +1,20 @@
 ﻿
 using MinecraftService.Service.Networking.Interfaces;
+using MinecraftService.Shared.Classes.Networking;
+using MinecraftService.Shared.Classes.Server;
+using MinecraftService.Shared.Classes.Service;
+using MinecraftService.Shared.Classes.Service.Configuration;
 using MinecraftService.Shared.SerializeModels;
 using Newtonsoft.Json;
 using System.IO.Compression;
 using System.Text;
 
-namespace MinecraftService.Service.Networking.NetworkStrategies {
-    public class ImportFileRequest : IMessageParser {
-        private readonly ServiceConfigurator _configuration;
-        private readonly IProcessInfo _processInfo;
-        private readonly IConfigurator _configurator;
-        public ImportFileRequest(IConfigurator configurator, IProcessInfo processInfo, ServiceConfigurator configuration) {
-            _configuration = configuration;
-            _processInfo = processInfo;
-            _configurator = configurator;
-        }
+namespace MinecraftService.Service.Networking.NetworkStrategies
+{
+    public class ImportFileRequest(UserConfigManager configurator, ProcessInfo processInfo, ServiceConfigurator configuration) : IMessageParser {
 
-        public (byte[] data, byte srvIndex, NetworkMessageTypes type) ParseMessage(byte[] data, byte serverIndex) {
-            ExportImportFileModel fileModel = JsonConvert.DeserializeObject<ExportImportFileModel>(Encoding.UTF8.GetString(data));
+        public Message ParseMessage(Message message) {
+            ExportImportFileModel fileModel = JsonConvert.DeserializeObject<ExportImportFileModel>(Encoding.UTF8.GetString(message.Data));
             switch (fileModel.FileType) {
                 case FileTypeFlags.ServerPackage:
                     MemoryStream ms = new(fileModel.Data);
@@ -28,7 +25,7 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
                     ZipArchiveEntry playerRegFile = null;
 
                     foreach (ZipArchiveEntry entry in zipArchive.Entries) {
-                        if (entry.Name.Contains(".conf") && !entry.Name.Contains("Service.conf")) {
+                        if (entry.Name.Contains(".conf") && !entry.Name.Equals("Service.conf")) {
                             serverConfFile = entry;
                         }
                         if (entry.Name.Contains("Backup-")) {
@@ -43,14 +40,14 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
                     }
                     if (serverConfFile != null) {
                         // serverConfFile.ExtractToFile()
-                        return (null, 0, NetworkMessageTypes.Heartbeat);
+                        return new Message { Type = MessageTypes.Heartbeat };
                     }
                     break;
                 case FileTypeFlags.ServicePackage:
-                    return (null, 0, NetworkMessageTypes.Heartbeat);
+                    return new Message { Type = MessageTypes.Heartbeat };
                     break;
             }
-            return (null, 0, NetworkMessageTypes.Heartbeat);
+            return new Message { Type = MessageTypes.Heartbeat };
         }
     }
 }

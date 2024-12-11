@@ -1,46 +1,41 @@
 ﻿
+using MinecraftService.Service.Core;
 using MinecraftService.Service.Networking.Interfaces;
+using MinecraftService.Shared.Classes.Networking;
+using MinecraftService.Shared.Classes.Service;
+using MinecraftService.Shared.Classes.Service.Configuration;
+using MinecraftService.Shared.Classes.Service.Core;
 using Newtonsoft.Json;
 using System.Text;
 
-namespace MinecraftService.Service.Networking.NetworkStrategies {
-    public class ServerPropUpdate : IMessageParser {
-        private readonly IServerLogger _logger;
-        private readonly ServiceConfigurator _serviceConfiguration;
-        private readonly IMinecraftService _mineraftService;
-        private readonly IConfigurator _configurator;
+namespace MinecraftService.Service.Networking.NetworkStrategies
+{
+    public class ServerPropUpdate(MmsLogger logger, UserConfigManager configurator, ServiceConfigurator serviceConfiguration, MmsService mineraftService) : IMessageParser {
 
-        public ServerPropUpdate(IServerLogger logger, IConfigurator configurator, ServiceConfigurator serviceConfiguration, IMinecraftService mineraftService) {
-            _logger = logger;
-            _configurator = configurator;
-            _serviceConfiguration = serviceConfiguration;
-            _mineraftService = mineraftService;
-        }
-
-        public (byte[] data, byte srvIndex, NetworkMessageTypes type) ParseMessage(byte[] data, byte serverIndex) {
-            string stringData = Encoding.UTF8.GetString(data, 5, data.Length - 5);
+        public Message ParseMessage(Message message) {
+            string stringData = Encoding.UTF8.GetString(message.Data, 5, message.Data.Length - 5);
             List<Property> propList = JsonConvert.DeserializeObject<List<Property>>(stringData, SharedStringBase.GlobalJsonSerialierSettings);
             Property prop = propList.FirstOrDefault(p => p.KeyName == "AcceptedMojangLic");
             if (prop != null) {
-                _serviceConfiguration.SetAllProps(propList);
-                _configurator.SaveGlobalFile();
-                _logger.AppendLine("Successfully wrote service configuration to file! Restarting service to apply changes!");
-                _mineraftService.RestartService();
-                return (Array.Empty<byte>(), 0, 0);
+                serviceConfiguration.SetAllProps(propList);
+                configurator.SaveGlobalFile();
+                logger.AppendLine("Successfully wrote service configuration to file! Restarting service to apply changes!");
+                mineraftService.RestartService();
+                return new();
             }
             prop = propList.FirstOrDefault(p => p.KeyName == "server-name");
             if (prop != null) {
                 foreach (Property property in propList) {
-                    _serviceConfiguration.GetServerInfoByIndex(serverIndex).SetProp(property);
+                    serviceConfiguration.GetServerInfoByIndex(message.ServerIndex).SetProp(property);
                 }
             } else {
                 foreach (Property property in propList) {
-                    _serviceConfiguration.GetServerInfoByIndex(serverIndex).SetSettingsProp(property.KeyName, property.StringValue);
+                    serviceConfiguration.GetServerInfoByIndex(message.ServerIndex).SetSettingsProp(property.KeyName, property.StringValue);
                 }
             }
-            _configurator.SaveServerConfiguration(_serviceConfiguration.GetServerInfoByIndex(serverIndex));
-            _logger.AppendLine("Successfully wrote server configuration to file! Restart server to apply changes!");
-            return (Array.Empty<byte>(), 0, NetworkMessageTypes.UICallback);
+            configurator.SaveServerConfiguration(serviceConfiguration.GetServerInfoByIndex(message.ServerIndex));
+            logger.AppendLine("Successfully wrote server configuration to file! Restart server to apply changes!");
+            return Message.EmptyUICallback;
         }
     }
 }

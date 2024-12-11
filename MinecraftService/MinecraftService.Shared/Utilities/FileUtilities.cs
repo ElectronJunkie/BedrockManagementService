@@ -1,6 +1,6 @@
-﻿using MinecraftService.Shared.Classes;
+﻿using MinecraftService.Shared.Classes.Service.Core;
 using MinecraftService.Shared.FileModels.MinecraftFileModels;
-using MinecraftService.Shared.JsonModels.MinecraftJsonModels;
+using MinecraftService.Shared.JsonModels.Minecraft;
 using MinecraftService.Shared.PackParser;
 using System;
 using System.Collections.Generic;
@@ -8,9 +8,10 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
-using static MinecraftService.Shared.Classes.SharedStringBase;
+using static MinecraftService.Shared.Classes.Service.Core.SharedStringBase;
 
-namespace MinecraftService.Shared.Utilities {
+namespace MinecraftService.Shared.Utilities
+{
     public class FileUtilities {
 
         public static string GetRandomPrefix() {

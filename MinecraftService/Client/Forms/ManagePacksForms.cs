@@ -11,9 +11,9 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using MinecraftService.Client.Management;
-using MinecraftService.Shared.Classes;
-using MinecraftService.Shared.Interfaces;
-using MinecraftService.Shared.JsonModels.LiteLoaderJsonModels;
+using MinecraftService.Shared.Classes.Networking;
+using MinecraftService.Shared.Classes.Server;
+using MinecraftService.Shared.Classes.Service.Core;
 using MinecraftService.Shared.PackParser;
 using MinecraftService.Shared.Utilities;
 using Newtonsoft.Json;
@@ -21,10 +21,10 @@ using Newtonsoft.Json;
 namespace MinecraftService.Client.Forms {
     public partial class ManagePacksForms : Form {
         private readonly byte _serverIndex;
-        private readonly IServerLogger _logger;
-        private readonly IProcessInfo _processInfo;
+        private readonly MmsLogger _logger;
+        private readonly ProcessInfo _processInfo;
         private readonly DirectoryInfo _packExtractDir;
-        public ManagePacksForms(byte serverIndex, IServerLogger logger, IProcessInfo processInfo) {
+        public ManagePacksForms(byte serverIndex, MmsLogger logger, ProcessInfo processInfo) {
             _logger = logger;
             _packExtractDir = new DirectoryInfo(SharedStringBase.GetNewTempDirectory("PackManager"));
             _processInfo = processInfo;
@@ -32,7 +32,7 @@ namespace MinecraftService.Client.Forms {
             InitializeComponent();
         }
 
-        public void PopulateServerData(List<MinecraftPackContainer> packList, LLServerPluginRegistry pluginReg = null) {
+        public void PopulateServerData(List<MinecraftPackContainer> packList) {
             foreach (MinecraftPackContainer container in packList) {
                 serverListBox.Items.Add(container);
             }
@@ -68,7 +68,11 @@ namespace MinecraftService.Client.Forms {
                     serverListBox.Items.Remove(item);
                 }
                 JsonSerializerSettings settings = new() { TypeNameHandling = TypeNameHandling.All };
-                FormManager.TCPClient.SendData(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(temp, Formatting.Indented, settings)), _serverIndex, NetworkMessageTypes.RemovePack);
+                FormManager.TCPClient.SendData(new() {
+                    Data = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(temp, Formatting.Indented, settings)),
+                    ServerIndex = _serverIndex,
+                    Type = MessageTypes.RemovePack
+                });
             }
             DialogResult = DialogResult.OK;
         }
@@ -118,7 +122,11 @@ namespace MinecraftService.Client.Forms {
                 }
             }
             ZipFile.CreateFromDirectory($@"{_packExtractDir.FullName}\BuildZip", $@"{_packExtractDir.FullName}\SendZip.zip");
-            FormManager.TCPClient.SendData(File.ReadAllBytes($@"{_packExtractDir.FullName}\SendZip.zip"), _serverIndex, NetworkMessageTypes.PackFile);
+            FormManager.TCPClient.SendData(new() {
+                Data = File.ReadAllBytes($@"{_packExtractDir.FullName}\SendZip.zip"),
+                ServerIndex = _serverIndex,
+                Type = MessageTypes.PackFile
+            });
             DialogResult = DialogResult.OK;
         }
 

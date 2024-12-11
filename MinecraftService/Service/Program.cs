@@ -20,9 +20,16 @@ global using System.Reflection;
 global using System.Threading;
 global using System.Threading.Tasks;
 global using Topshelf;
+using MinecraftService.Service.Core;
 using MinecraftService.Service.Networking.Interfaces;
+using MinecraftService.Shared.Classes.Server;
+using MinecraftService.Shared.Classes.Server.Updaters;
+using MinecraftService.Shared.Classes.Service;
+using MinecraftService.Shared.Classes.Service.Configuration;
+using MinecraftService.Shared.Classes.Service.Core;
 
-namespace MinecraftService.Service {
+namespace MinecraftService.Service
+{
     public class Program {
         public static bool IsExiting = false;
         private static readonly string _declaredType = "Service";
@@ -38,18 +45,18 @@ namespace MinecraftService.Service {
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) => {
-                    IProcessInfo processInfo = new ServiceProcessInfo(_declaredType, Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName), Process.GetCurrentProcess().Id, _isDebugEnabled, _shouldStartService);
+                    ProcessInfo processInfo = new ProcessInfo(_declaredType, Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName), Process.GetCurrentProcess().Id, _isDebugEnabled, _shouldStartService);
                     SharedStringBase.SetWorkingDirectory(processInfo);
                     services.AddHostedService<Core.WindowsService>()
                         .AddSingleton(processInfo)
                         .AddTransient<NetworkStrategyLookup>()
                         .AddTransient<FileUtilities>()
-                        .AddSingleton<IServerLogger, MinecraftServerLogger>()
+                        .AddSingleton<MmsLogger, MmsLogger>()
                         .AddSingleton<ServiceConfigurator>()
-                        .AddSingleton<IEnumTypeLookup, EnumTypeLookup>()
-                        .AddSingleton<IMinecraftService, Core.MmsService>()
-                        .AddSingleton<ITCPListener, TCPListener>()
-                        .AddSingleton<IConfigurator, ConfigManager>();
+                        .AddSingleton<UpdaterContainer>()
+                        .AddSingleton<MmsService>()
+                        .AddSingleton<ITCPObject, TCPListener>()
+                        .AddSingleton<UserConfigManager, UserConfigManager>();
                 });
     }
 }

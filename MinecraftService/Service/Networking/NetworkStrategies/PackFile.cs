@@ -1,27 +1,24 @@
 ﻿using MinecraftService.Service.Networking.Interfaces;
+using MinecraftService.Shared.Classes.Networking;
+using MinecraftService.Shared.Classes.Service;
+using MinecraftService.Shared.Classes.Service.Configuration;
+using MinecraftService.Shared.Classes.Service.Core;
 using MinecraftService.Shared.PackParser;
-using static MinecraftService.Shared.Classes.SharedStringBase;
+using static MinecraftService.Shared.Classes.Service.Core.SharedStringBase;
 
-namespace MinecraftService.Service.Networking.NetworkStrategies {
-    public class PackFile : IMessageParser {
+namespace MinecraftService.Service.Networking.NetworkStrategies
+{
+    public class PackFile(ServiceConfigurator serviceConfiguration, MmsLogger logger) : IMessageParser {
 
-        private readonly ServiceConfigurator _serviceConfiguration;
-        private readonly IServerLogger _logger;
-
-        public PackFile(ServiceConfigurator serviceConfiguration, IServerLogger logger) {
-            _logger = logger;
-            _serviceConfiguration = serviceConfiguration;
-        }
-
-        public (byte[] data, byte srvIndex, NetworkMessageTypes type) ParseMessage(byte[] data, byte serverIndex) {
+        public Message ParseMessage(Message message) {
             Progress<ProgressModel> progress = new Progress<ProgressModel>((progress) => {
                 string prog = string.Format("{0:N2}", progress.Progress);
-                _logger.AppendLine($"Extracting pack contents... {prog}% completed.");
+                logger.AppendLine($"Extracting pack contents... {prog}% completed.");
             });
-            MinecraftPackParser archiveParser = new(_logger, progress);
-            archiveParser.ProcessServerData(data, () => {
+            MinecraftPackParser archiveParser = new(logger, progress);
+            archiveParser.ProcessServerData(message.Data, () => {
                 foreach (MinecraftPackContainer container in archiveParser.FoundPacks) {
-                    IServerConfiguration server = _serviceConfiguration.GetServerInfoByIndex(serverIndex);
+                    IServerConfiguration server = serviceConfiguration.GetServerInfoByIndex(message.ServerIndex);
                     string serverPath = server.GetSettingsProp(ServerPropertyKeys.ServerPath).ToString();
                     string levelName = server.GetProp(MmsDependServerPropKeys.LevelName).ToString();
                     string filePath;
@@ -41,10 +38,10 @@ namespace MinecraftService.Service.Networking.NetworkStrategies {
                             FileUtilities.CopyFolderTree(new DirectoryInfo(container.PackContentLocation), new DirectoryInfo($"{GetServerDirectory(ServerDirectoryKeys.ResourcePacksDir, serverPath, levelName)}\\{container.FolderName}"));
                         }
                     }
-                    _logger.AppendLine($@"{container.GetFixedManifestType()} pack installed to server: {container.JsonManifest.header.name}.");
+                    logger.AppendLine($@"{container.GetFixedManifestType()} pack installed to server: {container.JsonManifest.header.name}.");
                 }
             });
-            return (Array.Empty<byte>(), 0, NetworkMessageTypes.UICallback);
+            return Message.EmptyUICallback;
         }
     }
 }

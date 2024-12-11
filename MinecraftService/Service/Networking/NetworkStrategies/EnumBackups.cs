@@ -1,20 +1,17 @@
 ﻿
 using MinecraftService.Service.Networking.Interfaces;
+using MinecraftService.Shared.Classes.Networking;
 using Newtonsoft.Json;
 using System.Text;
 
-namespace MinecraftService.Service.Networking.NetworkStrategies {
-    public class EnumBackups : IMessageParser {
-        private readonly IConfigurator _configurator;
+namespace MinecraftService.Service.Networking.NetworkStrategies
+{
+    public class EnumBackups(UserConfigManager configurator) : IMessageParser {
 
-        public EnumBackups(IConfigurator configurator) {
-            _configurator = configurator;
-        }
-
-        public (byte[] data, byte srvIndex, NetworkMessageTypes type) ParseMessage(byte[] data, byte serverIndex) {
-            string jsonString = JsonConvert.SerializeObject(_configurator.EnumerateBackupsForServer(serverIndex).Result, Formatting.Indented);
+        public Message ParseMessage(Message message) {
+            string jsonString = JsonConvert.SerializeObject(configurator.EnumerateBackupsForServer(message.ServerIndex).Result, Formatting.Indented);
             byte[] serializeToBytes = Encoding.UTF8.GetBytes(jsonString);
-            return (serializeToBytes, 0, NetworkMessageTypes.EnumBackups);
+            return new(serializeToBytes, 0, MessageTypes.EnumBackups);
         }
     }
 }

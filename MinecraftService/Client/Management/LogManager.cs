@@ -9,10 +9,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using MinecraftService.Shared.Classes;
+using MinecraftService.Shared.Classes.Networking;
+using MinecraftService.Shared.Classes.Service.Configuration;
+using MinecraftService.Shared.Classes.Service.Core;
 using MinecraftService.Shared.Interfaces;
 using MinecraftService.Shared.SerializeModels;
-using static MinecraftService.Shared.Classes.SharedStringBase;
+using static MinecraftService.Shared.Classes.Service.Core.SharedStringBase;
 
 namespace MinecraftService.Client.Management {
     class LogManager {
@@ -22,12 +24,12 @@ namespace MinecraftService.Client.Management {
         public List<string> ServiceLogs = new();
         private CancellationTokenSource _logTaskCancelSource;
         private ServiceConfigurator _connectedHost;
-        private readonly IServerLogger _logger;
+        private readonly MmsLogger _logger;
         private int currentServerLogLength;
         private int currentServiceLogLength;
         private int currentClientLogLength;
 
-        public LogManager(IServerLogger logger) {
+        public LogManager(MmsLogger logger) {
             _logger = logger;
         }
 
@@ -49,8 +51,14 @@ namespace MinecraftService.Client.Management {
                         int serverCount = FormManager.MainWindow.SelectedServer == null || FormManager.MainWindow.SelectedServer.GetLog() == null ? 0 : FormManager.MainWindow.SelectedServer.GetLog().Count;
                         int serviceCount = _connectedHost.GetLog() == null ? 0 : _connectedHost.GetLog().Count;
                         byte[] stringsToBytes = Encoding.UTF8.GetBytes(sendString.ToString());
-                        FormManager.TCPClient.SendData(stringsToBytes, NetworkMessageTypes.ConsoleLogUpdate);
-                        FormManager.TCPClient.SendData(FormManager.MainWindow.connectedHost.GetServerIndex(FormManager.MainWindow.SelectedServer), NetworkMessageTypes.ServerStatusRequest);
+                        FormManager.TCPClient.SendData(new() {
+                            Data = stringsToBytes,
+                            Type = MessageTypes.ConsoleLogUpdate
+                        });
+                        FormManager.TCPClient.SendData(new() {
+                            ServerIndex = FormManager.MainWindow.connectedHost.GetServerIndex(FormManager.MainWindow.SelectedServer),
+                            Type = MessageTypes.ServerStatusRequest
+                        });
                         Task.Delay(300).Wait();
 
                         if (FormManager.MainWindow.SelectedServer == null) {
