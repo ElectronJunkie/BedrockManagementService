@@ -16,7 +16,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v3.2.0
       with:
-        dotnet-version: 6.0.x
+        dotnet-version: 9.0.x
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v1.3.1
@@ -36,7 +36,7 @@ jobs:
     - name: Push Automatic Release
       uses: crowbarmaster/GH-Automatic-Releases@latest
       with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        repo_token: "${{ secrets.REPO_TOKEN }}"
         automatic_release_tag: "${{ env.PROJ_VER }}"
         prerelease: true
         title: "Development Build: Version ${{ env.PROJ_VER }}"
